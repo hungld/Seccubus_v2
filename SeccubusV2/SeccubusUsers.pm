@@ -28,10 +28,11 @@ all functions within the module
 @ISA = ('Exporter');
 
 @EXPORT = qw ( 
-		get_user_id
-		add_user 
-		get_login
-	     );
+	get_user_id
+	add_user 
+	get_login
+	get_users
+);
 
 use strict;
 use Carp;
@@ -137,9 +138,10 @@ sub add_user($$$) {
 		}
 	}
 }
-=head2 get_login
+
+=head2 get_users
  
-This function returns how a user is logged in
+This function returns the users in the database with their groups
 
 =over 2
 
@@ -149,7 +151,7 @@ None
 
 =item Checks
 
-None
+Must be and admin to use this function
 
 =item Returns
 
@@ -157,11 +159,9 @@ None
 
 =item Username
 
-=item Valid (0 or 1)
+=item Name
 
-=item Admin (0 or 1)
-
-=item Message 
+=item Groups
 
 =back 
 
@@ -169,25 +169,38 @@ None
 
 =cut 
 
-sub get_login() {
-	if ( ! exists $ENV{REMOTE_ADDR} ) {
-		# Running from command line means logged in as admin
-		return("admin",1,1,"Running from command line as admin");
-	} elsif ( ! exists $ENV{REMOTE_USER} ) {
-		# No auth setup
-		return("admin",1,1,"Unauthenticated user acting as admin");
-	} else {
-		my $name = sql ( "return"	=> "array",
-		       "query"	=> "select name from users where username = ?",
-		       "values" => [ $ENV{REMOTE_USER} ],
+sub get_users() {
+	if ( is_admin() ) {
+		my @result;
+		my $users = sql(
+			"return"	=> "ref",
+			"query"		=> "SELECT users.id, users.username, users.name, 
+									groups.id as groupid, groups.name as groupname
+			                FROM   users, user2group, groups 
+			                WHERE  user2group.user_id = users.id 
+			                	AND user2group.group_id = groups.id 
+			                ORDER BY username, groupname",
 		);
-		if ( $name ) {
-			# Valid user
-			return($ENV{REMOTE_USER},1,is_admin(),"Valid user '$name' ($ENV{REMOTE_USER})");
-		} else {
-			# Invalid user
-			return("<undef>",0,0,"Undefined user '$ENV{REMOTE_USER}'");
+
+		my $u = {};
+		foreach my $user ( @$users ) {
+			if ( $u->{id} != $$user[0] ) {
+				push @result, $u if exists $u->{id};
+				$u = {};
+				$u->{id} = $$user[0];
+				$u->{username} = $$user[1];
+				$u->{name} = $$user[2];
+				$u->{groups} = ();
+			}
+			my %g;
+			$g{id} = $$user[3];
+			$g{name} = $$user[4];
+			push @{$u->{groups}}, \%g;
 		}
+
+		return \@result;
+	} else {
+		return undef;
 	}
 }
 
