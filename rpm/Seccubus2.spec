@@ -187,14 +187,18 @@ The default config makes Seccubus available on http://localhost/seccubus
 
 ################################################################################
 OEF
-chcon -R --reference=/var/www/htdocs %{webdir}
+chcon -R --reference=/var/www/html %{webdir}
 chcon -R --reference=/var/www/cgi-bin %{webdir}/seccubus/json/
 %{_sbindir}/service httpd reload
 ## %post
 
 %postun
 %{_sbindir}/usermod -G $(id -nG apache|sed -e 's/%{seccuser}//' -e 's/ +$//g' -e 's/ +/,/g') apache
-%{_sbindir}/service httpd reload
+if [ -e %{_sbindir}/service ]; then
+	%{_sbindir}/service httpd reload
+else
+	/etc/init.d/httpd restart
+fi
 ## %postun
 
 ################################################################################
